@@ -3,6 +3,24 @@
     "my_package.mcp.auth:build_auth_interceptor"
   ],
   "mcpServers": {
+    "threat-intel": {
+      "enabled": false,
+      "type": "sse",
+      "url": "http://localhost:8101/sse",
+      "description": "多源威胁情报聚合"
+    },
+    "siem-search": {
+      "enabled": false,
+      "type": "sse",
+      "url": "http://localhost:8102/sse",
+      "description": "SIEM 日志检索"
+    },
+    "sandbox": {
+      "enabled": false,
+      "type": "sse",
+      "url": "http://localhost:8103/sse",
+      "description": "沙箱分析"
+    },
     "filesystem": {
       "enabled": false,
       "type": "stdio",
