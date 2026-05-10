@@ -43,7 +43,7 @@ markers = [
 index-url = "https://pypi.org/simple"
 
 [tool.uv.workspace]
-members = ["packages/harness"]
+members = ["packages/harness", "packages/memory-soc"]
 
 [tool.uv.sources]
 deerflow-harness = { workspace = true }
