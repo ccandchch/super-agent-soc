@@ -116,6 +116,14 @@ class PriorityQueue:
         top_items = heapq.nsmallest(n, self._heap)
         return [item.alert for item in top_items]
 
+    def peek_all(self) -> list[NormalizedAlert]:
+        """Return all alerts in the queue without removing them.
+
+        Returns:
+            A list of all NormalizedAlert instances in priority order.
+        """
+        return self.peek_top(self.size)
+
     @property
     def size(self) -> int:
         """Return the number of alerts currently in the queue."""
