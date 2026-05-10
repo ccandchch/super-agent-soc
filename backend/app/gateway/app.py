@@ -373,6 +373,12 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Stateless Runs API (stream/wait without a pre-existing thread)
     app.include_router(runs.router)
 
+    # Mount SOC ingestion sub-app at /api/soc
+    from app.ingestion.app import make_ingestion_app
+
+    soc_ingestion = make_ingestion_app()
+    app.mount("/api/soc", soc_ingestion)
+
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:
         """Health check endpoint.
