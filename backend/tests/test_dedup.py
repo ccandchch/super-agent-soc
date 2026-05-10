@@ -320,6 +320,24 @@ class TestAggregatedAlertFields:
             "AggregatedAlert fingerprint should start with 'merged:'"
         )
 
+    def test_time_delta_exceeds_window_does_not_aggregate(self):
+        from app.ingestion.dedup import DedupAggregator
+
+        da = DedupAggregator(entity_overlap_threshold=0.75, aggregation_time_window_seconds=300)
+        a1 = make_alert("a1", "fp1", [
+            Entity(type="ip", value="10.0.0.1"),
+            Entity(type="hash", value="abc"),
+        ], alert_time="2026-05-10T14:30:00Z")
+        da.process(a1)
+        a2 = make_alert("a2", "fp2", [
+            Entity(type="ip", value="10.0.0.1"),
+            Entity(type="hash", value="abc"),
+        ], alert_time="2026-05-10T14:36:00Z")  # 6 minutes later
+
+        result = da.process(a2)
+        assert result is not None
+        assert result.aggregation is None  # NOT aggregated, time delta exceeded
+
     def test_aggregation_raw_evidence_split(self):
         from app.ingestion.dedup import DedupAggregator
 

@@ -194,6 +194,8 @@ class DedupAggregator:
 
             jaccard = len(intersection) / len(union)
             if jaccard >= self.entity_overlap_threshold:
+                if _time_delta_seconds(alert.created_at, group.alerts[0].created_at) > self.aggregation_time_window_seconds:
+                    continue
                 return group
 
         return None
