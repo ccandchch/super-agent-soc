@@ -37,7 +37,7 @@ function getMainEntity(entities: AlertItem["entities"]): string | null {
   if (ip) return ip.value;
   const host = entities.find((e) => e.type === "hostname");
   if (host) return host.value;
-  return entities[0].value;
+  return entities[0]?.value ?? "—";
 }
 
 export function AlertCard({ alert }: { alert: AlertItem }) {
