@@ -34,7 +34,7 @@ class Dispatcher:
         langgraph_url: str = "http://localhost:2026/api/langgraph",
         memory_soc_url: str = "http://localhost:8003",
         recursion_limit: int = 100,
-        model_name: str = "claude-opus-4-7",
+        model_name: str | None = None,
     ) -> None:
         self.langgraph_url = langgraph_url
         self.memory_soc_url = memory_soc_url
@@ -187,16 +187,17 @@ class Dispatcher:
         message_content: str,
     ) -> str:
         """Create a new Run on the given thread and return its ``run_id``."""
+        configurable: dict = {"thinking_enabled": True}
+        if self.model_name:
+            configurable["model_name"] = self.model_name
+
         body = {
             "input": {
                 "messages": [{"role": "user", "content": message_content}],
             },
             "config": {
                 "recursion_limit": self.recursion_limit,
-                "configurable": {
-                    "model_name": self.model_name,
-                    "thinking_enabled": True,
-                },
+                "configurable": configurable,
             },
             "stream_mode": ["values", "messages-tuple", "custom"],
         }
