@@ -143,7 +143,11 @@ class ThreadMetaRepository(ThreadMetaStore):
         if resolved_user_id is None:
             return True  # explicit bypass
         row = await session.get(ThreadMetaRow, thread_id)
-        return row is not None and row.user_id == resolved_user_id
+        if row is None:
+            return False
+        if row.user_id is None:
+            return True  # shared / pre-auth data — visible to all
+        return row.user_id == resolved_user_id
 
     async def update_display_name(
         self,
