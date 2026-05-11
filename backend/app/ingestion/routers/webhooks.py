@@ -31,7 +31,7 @@ SEVERITY_TO_SCORE: dict[str, float] = {"low": 1, "medium": 2, "high": 3, "critic
 DEFAULT_SCORE = 2.0
 
 # Default batch flush interval. Set SOC_FLUSH_INTERVAL env var to override.
-_DEFAULT_FLUSH_INTERVAL = 3.0
+_DEFAULT_FLUSH_INTERVAL = 30.0  # seconds
 
 
 def _get_flush_interval() -> float:
