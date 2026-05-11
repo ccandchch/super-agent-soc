@@ -8,6 +8,12 @@ from httpx import ASGITransport, AsyncClient
 from app.ingestion.app import make_ingestion_app
 
 
+@pytest.fixture(autouse=True)
+def _disable_batching(monkeypatch):
+    """Set flush interval to 0 so alerts bypass the buffer in tests."""
+    monkeypatch.setenv("SOC_FLUSH_INTERVAL", "0")
+
+
 @pytest.fixture
 def ingestion_app():
     """Return a freshly configured ingestion FastAPI sub-application."""
