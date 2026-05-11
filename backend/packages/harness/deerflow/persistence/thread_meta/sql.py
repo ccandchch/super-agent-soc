@@ -67,7 +67,8 @@ class ThreadMetaRepository(ThreadMetaStore):
             if row is None:
                 return None
             # Enforce owner filter unless explicitly bypassed (user_id=None).
-            if resolved_user_id is not None and row.user_id != resolved_user_id:
+            # Threads with row.user_id=NULL are shared / pre-auth data.
+            if resolved_user_id is not None and row.user_id is not None and row.user_id != resolved_user_id:
                 return None
             return self._row_to_dict(row)
 
@@ -118,7 +119,10 @@ class ThreadMetaRepository(ThreadMetaStore):
         resolved_user_id = resolve_user_id(user_id, method_name="ThreadMetaRepository.search")
         stmt = select(ThreadMetaRow).order_by(ThreadMetaRow.updated_at.desc())
         if resolved_user_id is not None:
-            stmt = stmt.where(ThreadMetaRow.user_id == resolved_user_id)
+            stmt = stmt.where(
+                (ThreadMetaRow.user_id == resolved_user_id)
+                | (ThreadMetaRow.user_id.is_(None))
+            )
         if status:
             stmt = stmt.where(ThreadMetaRow.status == status)
 
