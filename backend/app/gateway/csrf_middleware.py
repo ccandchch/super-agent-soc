@@ -173,6 +173,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Bypass CSRF for internal Gateway callers (Dispatcher, IM channels).
+        from app.gateway.internal_auth import INTERNAL_AUTH_HEADER_NAME, is_valid_internal_auth_token
+
+        if is_valid_internal_auth_token(request.headers.get(INTERNAL_AUTH_HEADER_NAME)):
+            return await call_next(request)
+
         _is_auth = is_auth_endpoint(request)
 
         if should_check_csrf(request) and _is_auth and not is_allowed_auth_origin(request):
