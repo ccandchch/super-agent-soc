@@ -13,6 +13,7 @@ import logging
 
 import httpx
 
+from app.gateway.internal_auth import create_internal_auth_headers
 from app.ingestion.models import NormalizedAlert
 from app.ingestion.queue import PriorityQueue
 
@@ -90,8 +91,11 @@ class Dispatcher:
         # 4. Build message content
         message_content = self._build_message(alert, similar)
 
-        # 5-6. Create Thread + Run
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        # 5-6. Create Thread + Run (with internal auth bypass)
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            headers=create_internal_auth_headers(),
+        ) as client:
             thread_id = await self._create_thread(client)
             run_id = await self._create_run(client, thread_id, message_content)
 
