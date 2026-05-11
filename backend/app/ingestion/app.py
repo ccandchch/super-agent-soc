@@ -20,24 +20,24 @@ from app.ingestion.queue import PriorityQueue
 from app.ingestion.routers import queue_status, webhooks
 
 
-def make_ingestion_app() -> FastAPI:
+def make_ingestion_app(
+    normalizer: Normalizer | None = None,
+    dedup_aggregator: DedupAggregator | None = None,
+    queue: PriorityQueue | None = None,
+) -> FastAPI:
     """Create and configure the SOC Alert Ingestion FastAPI sub-application.
 
-    Initialises the normalizer, dedup-aggregator, and priority queue on
-    ``app.state`` so every route handler can access them via
-    ``request.app.state``.
+    Accepts optional shared state instances so the main Gateway lifespan
+    can own the queue and pass it in for the Dispatcher to consume.
 
     The Dispatcher background loop is started by the main Gateway lifespan,
     not here — sub-app lifespans are unreliable with app.mount().
-
-    Returns:
-        A configured FastAPI instance ready for mounting or standalone use.
     """
     app = FastAPI(title="SOC Alert Ingestion", version="0.1.0")
 
-    app.state.normalizer = Normalizer()
-    app.state.dedup_aggregator = DedupAggregator()
-    app.state.queue = PriorityQueue()
+    app.state.normalizer = normalizer or Normalizer()
+    app.state.dedup_aggregator = dedup_aggregator or DedupAggregator()
+    app.state.queue = queue or PriorityQueue()
 
     app.include_router(webhooks.router, prefix="/webhooks")
     app.include_router(queue_status.router, prefix="/queue")

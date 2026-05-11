@@ -191,42 +191,43 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logger.exception("No IM channels configured or channel service failed to start")
 
-        # Start SOC alert dispatcher background loop
-        # Uses the shared ingestion queue from the mounted sub-app.
-        # Inside Docker the LangGraph runtime is at http://localhost:8001/api
-        # (not through nginx on :2026 which is a separate container).
+        # Start SOC alert dispatcher background loop.
+        # The queue is shared between the ingestion sub-app and the dispatcher
+        # via app.state.soc_queue, set below by the mounting code.
+        # Inside Docker the LangGraph runtime is at http://localhost:8001/api.
         _dispatch_stop = asyncio.Event()
         _dispatch_task = None
-        try:
-            from app.ingestion.dispatcher import Dispatcher
+        _soc_queue = getattr(app.state, "soc_queue", None)
+        if _soc_queue is not None:
+            try:
+                from app.ingestion.dispatcher import Dispatcher
 
-            _langgraph_url = os.environ.get(
-                "SOC_LANGGRAPH_URL",
-                "http://localhost:8001/api",
-            )
-            _dispatcher = Dispatcher(langgraph_url=_langgraph_url)
+                _langgraph_url = os.environ.get(
+                    "SOC_LANGGRAPH_URL",
+                    "http://localhost:8001/api",
+                )
+                _dispatcher = Dispatcher(langgraph_url=_langgraph_url)
 
-            async def _dispatch_loop():
-                logger.info("SOC Dispatcher loop started (langgraph=%s)", _langgraph_url)
-                while not _dispatch_stop.is_set():
-                    try:
-                        # Access the queue from the ingestion sub-app (module-level variable)
-                        result = await _dispatcher.dispatch_one(
-                            soc_ingestion.state.queue
-                        )
-                        if result is None:
-                            await asyncio.sleep(1)
-                        else:
-                            logger.info("SOC Dispatched: %s", result)
-                    except Exception:
-                        logger.exception("SOC Dispatch error")
-                        await asyncio.sleep(5)
-                    await asyncio.sleep(0.5)
-                logger.info("SOC Dispatcher loop stopped")
+                async def _dispatch_loop():
+                    logger.info("SOC Dispatcher loop started (langgraph=%s)", _langgraph_url)
+                    while not _dispatch_stop.is_set():
+                        try:
+                            result = await _dispatcher.dispatch_one(_soc_queue)
+                            if result is None:
+                                await asyncio.sleep(1)
+                            else:
+                                logger.info("SOC Dispatched: %s", result)
+                        except Exception:
+                            logger.exception("SOC Dispatch error")
+                            await asyncio.sleep(5)
+                        await asyncio.sleep(0.5)
+                    logger.info("SOC Dispatcher loop stopped")
 
-            _dispatch_task = asyncio.create_task(_dispatch_loop())
-        except Exception:
-            logger.exception("SOC Dispatcher failed to start; alerts will queue but not dispatch")
+                _dispatch_task = asyncio.create_task(_dispatch_loop())
+            except Exception:
+                logger.exception("SOC Dispatcher failed to start; alerts will queue but not dispatch")
+        else:
+            logger.warning("SOC queue not initialised; skipping Dispatcher start")
 
         yield
 
@@ -420,10 +421,13 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Stateless Runs API (stream/wait without a pre-existing thread)
     app.include_router(runs.router)
 
-    # Mount SOC ingestion sub-app at /api/soc
+    # Mount SOC ingestion sub-app at /api/soc.
+    # Queue is shared between the sub-app and the Gateway lifespan (Dispatcher).
     from app.ingestion.app import make_ingestion_app
+    from app.ingestion.queue import PriorityQueue
 
-    soc_ingestion = make_ingestion_app()
+    app.state.soc_queue = PriorityQueue()
+    soc_ingestion = make_ingestion_app(queue=app.state.soc_queue)
     app.mount("/api/soc", soc_ingestion)
 
     @app.get("/health", tags=["health"])
