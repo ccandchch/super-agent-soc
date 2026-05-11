@@ -25,7 +25,7 @@ from app.gateway.deps import get_checkpointer
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime import serialize_channel_values
-from deerflow.runtime.user_context import get_effective_user_id
+from deerflow.runtime.user_context import AUTO as AUTO_USER, get_effective_user_id
 from deerflow.utils.time import coerce_iso, now_iso
 
 logger = logging.getLogger(__name__)
@@ -249,12 +249,19 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
             metadata=existing_record.get("metadata", {}),
         )
 
+    # Internal callers (Dispatcher, IM channels) create shared threads
+    # so they are visible to all authenticated users in /threads/search.
+    from app.gateway.internal_auth import INTERNAL_AUTH_HEADER_NAME, is_valid_internal_auth_token
+
+    thread_user_id = None if is_valid_internal_auth_token(request.headers.get(INTERNAL_AUTH_HEADER_NAME)) else AUTO_USER
+
     # Write thread_meta so the thread appears in /threads/search immediately
     try:
         await thread_store.create(
             thread_id,
             assistant_id=getattr(body, "assistant_id", None),
             metadata=body.metadata,
+            user_id=thread_user_id,
         )
     except Exception:
         logger.exception("Failed to write thread_meta for %s", sanitize_log_param(thread_id))
