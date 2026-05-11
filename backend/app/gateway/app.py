@@ -191,7 +191,54 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logger.exception("No IM channels configured or channel service failed to start")
 
+        # Start SOC alert dispatcher background loop
+        # Uses the shared ingestion queue from the mounted sub-app.
+        # Inside Docker the LangGraph runtime is at http://localhost:8001/api
+        # (not through nginx on :2026 which is a separate container).
+        _dispatch_stop = asyncio.Event()
+        _dispatch_task = None
+        try:
+            from app.ingestion.dispatcher import Dispatcher
+
+            _langgraph_url = os.environ.get(
+                "SOC_LANGGRAPH_URL",
+                "http://localhost:8001/api",
+            )
+            _dispatcher = Dispatcher(langgraph_url=_langgraph_url)
+
+            async def _dispatch_loop():
+                logger.info("SOC Dispatcher loop started (langgraph=%s)", _langgraph_url)
+                while not _dispatch_stop.is_set():
+                    try:
+                        # Access the queue from the ingestion sub-app (module-level variable)
+                        result = await _dispatcher.dispatch_one(
+                            soc_ingestion.state.queue
+                        )
+                        if result is None:
+                            await asyncio.sleep(1)
+                        else:
+                            logger.info("SOC Dispatched: %s", result)
+                    except Exception:
+                        logger.exception("SOC Dispatch error")
+                        await asyncio.sleep(5)
+                    await asyncio.sleep(0.5)
+                logger.info("SOC Dispatcher loop stopped")
+
+            _dispatch_task = asyncio.create_task(_dispatch_loop())
+        except Exception:
+            logger.exception("SOC Dispatcher failed to start; alerts will queue but not dispatch")
+
         yield
+
+        # Stop SOC dispatcher loop
+        if _dispatch_task is not None:
+            _dispatch_stop.set()
+            _dispatch_task.cancel()
+            try:
+                await _dispatch_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("SOC Dispatcher shutdown complete")
 
         # Stop channel service on shutdown (bounded to prevent worker hang)
         try:
