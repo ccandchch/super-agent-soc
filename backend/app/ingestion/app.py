@@ -24,6 +24,7 @@ def make_ingestion_app(
     normalizer: Normalizer | None = None,
     dedup_aggregator: DedupAggregator | None = None,
     queue: PriorityQueue | None = None,
+    thread_alert_map: dict | None = None,
 ) -> FastAPI:
     """Create and configure the SOC Alert Ingestion FastAPI sub-application.
 
@@ -38,6 +39,7 @@ def make_ingestion_app(
     app.state.normalizer = normalizer or Normalizer()
     app.state.dedup_aggregator = dedup_aggregator or DedupAggregator()
     app.state.queue = queue or PriorityQueue()
+    app.state.thread_alert_map = thread_alert_map or {}
 
     app.include_router(webhooks.router, prefix="/webhooks")
     app.include_router(queue_status.router, prefix="/queue")

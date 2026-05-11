@@ -208,6 +208,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
                 _dispatcher = Dispatcher(langgraph_url=_langgraph_url)
 
+                _soc_alert_map: dict = app.state.thread_alert_map
+
                 async def _dispatch_loop():
                     logger.info("SOC Dispatcher loop started (langgraph=%s)", _langgraph_url)
                     while not _dispatch_stop.is_set():
@@ -217,6 +219,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                                 await asyncio.sleep(1)
                             else:
                                 logger.info("SOC Dispatched: %s", result)
+                                # Store alert→thread mapping for frontend lookup
+                                tid = result.get("thread_id")
+                                if tid:
+                                    _soc_alert_map[tid] = {
+                                        "thread_id": tid,
+                                        "alert_id": result.get("alert_id"),
+                                    }
                         except Exception:
                             logger.exception("SOC Dispatch error")
                             await asyncio.sleep(5)
@@ -427,7 +436,11 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     from app.ingestion.queue import PriorityQueue
 
     app.state.soc_queue = PriorityQueue()
-    soc_ingestion = make_ingestion_app(queue=app.state.soc_queue)
+    app.state.thread_alert_map: dict[str, dict] = {}
+    soc_ingestion = make_ingestion_app(
+        queue=app.state.soc_queue,
+        thread_alert_map=app.state.thread_alert_map,
+    )
     app.mount("/api/soc", soc_ingestion)
 
     @app.get("/health", tags=["health"])

@@ -96,15 +96,21 @@ class Dispatcher:
             timeout=10.0,
             headers=create_internal_auth_headers(),
         ) as client:
-            thread_id = await self._create_thread(client)
+            thread_id = await self._create_thread(client, alert)
             run_id = await self._create_run(client, thread_id, message_content)
 
-        # 7. Return dispatch result
+        # 7. Return dispatch result (includes alert context for frontend)
         return {
             "fast_triage": False,
             "thread_id": thread_id,
             "run_id": run_id,
             "alert_id": alert.id,
+            "alarm_id": alert.alarm_id,
+            "defense_line": alert.defense_line,
+            "alert_name": alert.alert_name,
+            "severity": alert.severity,
+            "type": alert.type,
+            "created_at": alert.created_at,
         }
 
     # ── Memory-SOC query ────────────────────────────────────────────────────
@@ -170,11 +176,26 @@ class Dispatcher:
 
     # ── LangGraph API helpers ───────────────────────────────────────────────
 
-    async def _create_thread(self, client: httpx.AsyncClient) -> str:
-        """Create a new LangGraph thread and return its ``thread_id``."""
+    async def _create_thread(self, client: httpx.AsyncClient, alert: NormalizedAlert) -> str:
+        """Create a new LangGraph thread and return its ``thread_id``.
+
+        Includes alert metadata so the frontend can display alert context
+        without querying a separate endpoint.
+        """
         response = await client.post(
             f"{self.langgraph_url}/threads",
-            json={"metadata": {"source": "soc-ingestion"}},
+            json={
+                "metadata": {
+                    "source": "soc-ingestion",
+                    "alert_id": alert.id,
+                    "alarm_id": alert.alarm_id,
+                    "defense_line": alert.defense_line,
+                    "alert_name": alert.alert_name,
+                    "severity": alert.severity,
+                    "type": alert.type,
+                    "created_at": alert.created_at,
+                }
+            },
         )
         response.raise_for_status()
         data = response.json()
