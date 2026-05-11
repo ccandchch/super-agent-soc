@@ -83,7 +83,7 @@ class DedupAggregator:
     def __init__(
         self,
         window_seconds: float = 600,
-        entity_overlap_threshold: float = 0.75,
+        entity_overlap_threshold: float = 0.60,
         aggregation_time_window_seconds: float = 300,
         max_aggregation_size: int = 10,
     ):
