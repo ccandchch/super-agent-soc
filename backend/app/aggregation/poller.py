@@ -51,18 +51,32 @@ class SiemPoller:
                 logger.exception("Normalization failed for alarm_id=%s", raw.alarm_id)
 
         # ── Run through dedup + aggregation as a batch ───────────────────
-        results: list[Event] = []
+        # Process all alerts through the aggregator. When alerts are merged,
+        # the aggregated result supersedes individual ones. We keep only the
+        # latest result for each alarm_id (the most merged version).
+        results_by_alarm: dict[str, Event] = {}
         for alert in normalized:
             aggregated = self._aggregator.process(alert)
             if aggregated is not None:
                 event = self._to_event(aggregated)
-                results.append(event)
+                # Index by all source alarm_ids — later entries overwrite earlier ones
+                for src in event.source_alarms:
+                    if src.alarm_id:
+                        results_by_alarm[src.alarm_id] = event
+
+        # Deduplicate: same Event object may be keyed by multiple alarm_ids
+        seen_ids: set[int] = set()
+        unique_events: list[Event] = []
+        for event in results_by_alarm.values():
+            if id(event) not in seen_ids:
+                seen_ids.add(id(event))
+                unique_events.append(event)
 
         logger.info(
             "Poll cycle: fetched=%d normalized=%d events=%d",
-            len(raw_alerts), len(normalized), len(results),
+            len(raw_alerts), len(normalized), len(unique_events),
         )
-        return results
+        return unique_events
 
     async def _fetch_alerts(self) -> list[RawAlert]:
         """Fetch unacknowledged alerts from SIEM API with pagination."""
@@ -70,7 +84,7 @@ class SiemPoller:
         page = 0
         since = self._last_poll
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
             while True:
                 params: dict = {"page": page, "size": PAGE_SIZE, "status": "unacknowledged"}
                 if since:

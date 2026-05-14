@@ -95,6 +95,7 @@ class Dispatcher:
         async with httpx.AsyncClient(
             timeout=10.0,
             headers=create_internal_auth_headers(),
+            trust_env=False,
         ) as client:
             thread_id = await self._create_thread(client, alert)
             run_id = await self._create_run(client, thread_id, message_content)
@@ -132,7 +133,7 @@ class Dispatcher:
             "lookback_days": 30,
         }
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
                 response = await client.get(
                     f"{self.memory_soc_url}/api/similar-alerts",
                     params=params,

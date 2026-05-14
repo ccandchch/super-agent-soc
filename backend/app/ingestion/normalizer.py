@@ -29,13 +29,13 @@ ALERT_TYPE_MAP: dict[str, str] = {
 # ── Semantic field-name pattern → entity type ───────────────────────────────────
 
 _SEMANTIC_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r".*_ip(_src|_dst)?$"), "ip"),
-    (re.compile(r".*_hash$|.*_md5$|.*_sha256$"), "hash"),
-    (re.compile(r".*_domain$"), "domain"),
-    (re.compile(r".*_url$|.*url.*"), "url"),
-    (re.compile(r".*_user.*|.*_account.*"), "user"),
-    (re.compile(r".*_host.*|.*_hostname.*"), "host"),
-    (re.compile(r".*_process.*"), "process"),
+    (re.compile(r".*(^|_)ip(_src|_dst)?$"), "ip"),
+    (re.compile(r".*(^|_)hash$|.*(^|_)md5$|.*(^|_)sha256$"), "hash"),
+    (re.compile(r".*(^|_)domain$"), "domain"),
+    (re.compile(r".*(^|_)url$|.*url.*"), "url"),
+    (re.compile(r".*(^|_)user.*|.*(^|_)account.*"), "user"),
+    (re.compile(r".*(^|_)host.*|.*hostname.*"), "host"),
+    (re.compile(r".*(^|_)process.*|.*process_.*"), "process"),
 ]
 
 
