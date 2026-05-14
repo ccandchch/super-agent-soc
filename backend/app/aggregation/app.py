@@ -37,7 +37,7 @@ def make_app() -> FastAPI:
                 try:
                     events = await poller.poll()
                     if events:
-                        await app.state.event_store.push_batch(events)
+                        await app.state.event_store.replace_superseded(events)
                         logger.info("Poll produced %d events", len(events))
                 except Exception:
                     logger.exception("Poll cycle failed")
