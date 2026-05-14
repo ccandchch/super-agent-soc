@@ -73,6 +73,7 @@ export function WorkspaceNavChatList() {
                   asChild
                 >
                   <Link href="/workspace/soc/alerts">
+                    <ShieldIcon className="size-3.5" />
                     <span>告警工作台</span>
                   </Link>
                 </SidebarMenuSubButton>

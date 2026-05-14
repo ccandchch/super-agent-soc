@@ -1,0 +1,11 @@
+[project]
+name = "soc-aggregation"
+version = "0.1.0"
+description = "SOC Alert Aggregation Microservice — polls SIEM, aggregates alerts into events"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.12.5",
+]
