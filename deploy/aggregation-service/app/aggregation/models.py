@@ -21,6 +21,7 @@ class Event(BaseModel):
     alert_type: str
     severity: str
     source_alarms: list[EventSource]
+    deduped_alarm_ids: list[str] = Field(default_factory=list)
     entity_overlap: float
     occurrence_count: int
     entities: list[dict]

@@ -151,6 +151,7 @@ class SiemPoller:
                 source_alarms=sources or [
                     EventSource(alarm_id=alert.alarm_id or alert.id, alert_name=alert.alert_name, alert_time=alert.created_at)
                 ],
+                deduped_alarm_ids=list(alert.deduped_alarm_ids),
                 entity_overlap=alert.aggregation.get("entity_overlap", 1.0),
                 occurrence_count=len(sources),
                 entities=[{"type": e.type, "value": e.value} for e in alert.entities],
@@ -166,6 +167,7 @@ class SiemPoller:
                 source_alarms=[
                     EventSource(alarm_id=alert.alarm_id or alert.id, alert_name=alert.alert_name, alert_time=alert.created_at)
                 ],
+                deduped_alarm_ids=list(alert.deduped_alarm_ids),
                 entity_overlap=0.0,
                 occurrence_count=1,
                 entities=[{"type": e.type, "value": e.value} for e in alert.entities],

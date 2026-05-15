@@ -57,9 +57,10 @@ GET /api/aggregation/events/peek    → [Event, ...]  不消费，仅查看
 | alert_name | string | 告警名称 |
 | alert_type | string | 统一类型（malware, phishing...） |
 | severity | string | 聚合组内最高级别 |
-| source_alarms | array | 所有源告警 ID |
+| source_alarms | array | 所有被聚合的源告警 |
+| deduped_alarm_ids | array | 指纹去重丢弃的告警 ID（Agent 需同步更新 SIEM） |
 | entity_overlap | float | Jaccard 重叠度 |
-| occurrence_count | int | 聚合告警数 |
+| occurrence_count | int | 聚合 + 去重的告警总数 |
 | entities | array | 合并后的实体 |
 | raw_evidence.common | dict | 所有告警相同字段 |
 | raw_evidence.per_alarm | dict | 各告警独有字段（按 alarm_id） |
