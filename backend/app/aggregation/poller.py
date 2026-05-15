@@ -138,6 +138,13 @@ class SiemPoller:
     @staticmethod
     def _to_event(alert) -> Event:
         """Convert an aggregated NormalizedAlert into an Event."""
+        # Merge fingerprint-deduped evidence into per_alarm
+        evidence = dict(alert.raw_evidence)
+        if alert.deduped_evidence:
+            per = evidence.setdefault("per_alarm", {})
+            for alarm_id, ev in alert.deduped_evidence.items():
+                per[alarm_id] = ev
+
         if alert.aggregation:
             sources = [
                 EventSource(alarm_id=s["alarm_id"], alert_name=s.get("alert_name", alert.alert_name), alert_time=alert.created_at)
@@ -155,7 +162,7 @@ class SiemPoller:
                 entity_overlap=alert.aggregation.get("entity_overlap", 1.0),
                 occurrence_count=len(sources),
                 entities=[{"type": e.type, "value": e.value} for e in alert.entities],
-                raw_evidence=alert.raw_evidence,
+                raw_evidence=evidence,
                 created_at=alert.created_at,
             )
         else:
@@ -171,6 +178,6 @@ class SiemPoller:
                 entity_overlap=0.0,
                 occurrence_count=1,
                 entities=[{"type": e.type, "value": e.value} for e in alert.entities],
-                raw_evidence=alert.raw_evidence,
+                raw_evidence=evidence,
                 created_at=alert.created_at,
             )

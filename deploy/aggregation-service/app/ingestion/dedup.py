@@ -112,6 +112,9 @@ class DedupAggregator:
             if alert.alarm_id:
                 existing.first_alert.deduped_alarm_ids.append(alert.alarm_id)
                 existing.alarm_ids_set.add(alert.alarm_id)
+                # Preserve the deduplicated alert's raw_evidence so Agent
+                # can see field differences across fingerprint-identical alerts
+                existing.first_alert.deduped_evidence[alert.alarm_id] = alert.raw_evidence
             existing.count += 1
             return None
 

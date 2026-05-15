@@ -100,6 +100,10 @@ class NormalizedAlert(BaseModel):
         default_factory=list,
         description="Alarm IDs that were deduplicated into this alert",
     )
+    deduped_evidence: dict[str, dict] = Field(
+        default_factory=dict,
+        description="raw_evidence from fingerprint-deduped alerts, keyed by alarm_id",
+    )
     aggregation: dict[str, Any] | None = Field(
         None, description="Aggregation metadata (set for aggregated alerts)"
     )
