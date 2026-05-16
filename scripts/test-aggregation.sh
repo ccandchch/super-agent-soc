@@ -22,7 +22,7 @@ echo "════════════════════════�
 echo ""
 echo "[1/5] 启动 Mock SIEM..."
 
-python3 "$SCRIPT_DIR/mock_siem_v2.py" 9090 &
+python3 "$SCRIPT_DIR/mock_siem_v3.py" 9090 &
 sleep 1
 
 if ! curl -s http://localhost:9090/health > /dev/null 2>&1; then
@@ -70,8 +70,6 @@ for i, e in enumerate(events):
         first_key = list(per.keys())[0]
         print(f'           per_alarm_example: {first_key} → {list(per[first_key].keys())[:3]}')
 "
-
-EXPECTED_EVENTS=4  # 聚合(3) + 聚合(2) + email(1) + network(1) = 4
 
 echo ""
 echo "[4/5] 验证聚合逻辑..."

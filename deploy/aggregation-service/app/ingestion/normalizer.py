@@ -24,6 +24,9 @@ ALERT_TYPE_MAP: dict[str, str] = {
     "Account_Brute_Force": "anomaly_login",
     "Account_Impossible_Travel": "anomaly_login",
     "Server_Privilege_Escalation": "privilege_escalation",
+    "Endpoint_Webshell_Detected": "malware",
+    "App_SQL_Injection": "sql_injection",
+    "App_XSS_Attack": "xss",
 }
 
 # ── Semantic field-name pattern → entity type ───────────────────────────────────

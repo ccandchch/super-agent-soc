@@ -189,6 +189,13 @@ class DedupAggregator:
             if len(group.alerts) >= self.max_aggregation_size:
                 continue
 
+            # Key-entity match: same hash/user/domain → merge regardless of Jaccard
+            key_types = {"hash", "user", "domain"}
+            alert_keys = {e for e in alert_entities if e[0] in key_types}
+            if alert_keys and (alert_keys & group.entity_set):
+                if _time_delta_seconds(alert.created_at, group.alerts[0].created_at) <= self.aggregation_time_window_seconds:
+                    return group
+
             # Jaccard similarity on entity (type, value) tuples
             intersection = alert_entities & group.entity_set
             union = alert_entities | group.entity_set
