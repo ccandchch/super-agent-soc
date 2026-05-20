@@ -19,8 +19,7 @@ Two problems:
 
 ### Remove ALERT_TYPE_MAP
 
-- Delete the `ALERT_TYPE_MAP` dictionary from `normalizer.py` (both `backend/` and
-  `deploy/aggregation-service/` copies).
+- Delete the `ALERT_TYPE_MAP` dictionary from `deploy/aggregation-service/app/ingestion/normalizer.py`.
 - The normalized `alert_type` field becomes the raw `alert_name` directly.
   The AI agent still sees a human-readable alert identifier — just not a hardcoded remapping of it.
 
@@ -55,11 +54,9 @@ After:   raw.alert_name → alert_type (passthrough)
 
 | File | Change |
 |------|--------|
-| `backend/app/ingestion/models.py` | Add `severity` to `RawAlert` |
-| `backend/app/ingestion/normalizer.py` | Delete `ALERT_TYPE_MAP`, delete `_determine_severity()`, use `raw.alert_name` and `raw.severity` directly |
-| `deploy/aggregation-service/app/ingestion/normalizer.py` | Same as above |
+| `deploy/aggregation-service/app/ingestion/models.py` | Add `severity` to `RawAlert` |
+| `deploy/aggregation-service/app/ingestion/normalizer.py` | Delete `ALERT_TYPE_MAP`, delete `_determine_severity()`, use `raw.alert_name` and `raw.severity` directly |
 | `scripts/mock_siem_v3.py` | Add `severity` field to all 20 alerts |
-| `backend/tests/test_normalizer.py` | Remove TypeMapping and Severity test classes; update fixtures |
 | `deploy/aggregation-service/README.md` | Remove ALERT_TYPE_MAP documentation references |
 
 ### What does NOT change
@@ -67,8 +64,9 @@ After:   raw.alert_name → alert_type (passthrough)
 - `_SEMANTIC_PATTERNS` — semantic field-name patterns are vendor-agnostic and stay.
 - `FIELD_MAPPING` — per-alert-name generic field mapping stays (still needed for SIEMs
   that use non-semantic field names like `key_word1`).
-- `SEVERITY_ORDER` in `dedup.py` and `SEVERITY_TO_SCORE` in `routers/webhooks.py` remain
-  — those map severity strings to numeric values for aggregation and priority scoring.
+- `SEVERITY_ORDER` in `dedup.py` remains — it maps severity strings to numeric values for aggregation.
+- `backend/app/ingestion/` files are NOT changed. The backend copy of the ingestion pipeline is
+  out of scope for this change.
 
 ## Third-Party SIEM Integration Guide
 
@@ -76,7 +74,8 @@ After this change, the integration surface for a third-party SIEM is:
 
 ### 1. Map data to the `RawAlert` contract (required)
 
-The SIEM must produce alerts with these fields:
+Whether pushing alerts via webhook or being polled, the SIEM must produce alerts with
+these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -87,44 +86,31 @@ The SIEM must produce alerts with these fields:
 | `severity` | `str` | One of: `critical`, `high`, `medium`, `low` |
 | `raw_evidence` | `dict` | Arbitrary evidence key-value pairs (IPs, hashes, hostnames, etc.) |
 
-### 2. Write a custom adapter (if needed)
+### 2. Adapt the SIEM API response format (if different)
 
-If the SIEM webhook sends a different JSON structure, subclass `AlertAdapter`:
+If the SIEM API returns a different JSON structure than `RawAlert`, modify
+`SiemPoller._fetch_alerts()` in `app/aggregation/poller.py` to translate the response
+into `RawAlert` objects. Example: if the SIEM returns `{"alertId": ..., "timestamp": ...}`,
+add a mapping layer:
 
 ```python
-# backend/app/ingestion/adapters/my_siem.py
-from app.ingestion.adapters.base import AlertAdapter
-from app.ingestion.models import RawAlert, DefenseLine
-
-class MySiemAdapter(AlertAdapter):
-    def parse(self, body: dict, vendor: str) -> RawAlert:
-        return RawAlert(
-            alarm_id=body["event"]["id"],
-            alert_time=body["event"]["timestamp"],
-            defense_line=DefenseLine(body["category"]),
-            alert_name=body["rule"]["name"],
-            severity=body["severity"].lower(),
-            raw_evidence=body["event"]["fields"],
-        )
+raw = RawAlert(
+    alarm_id=item["alertId"],
+    alert_time=item["timestamp"],
+    defense_line=DefenseLine(item["category"]),
+    alert_name=item["ruleName"],
+    severity=item["severity"].lower(),
+    raw_evidence=item,
+)
 ```
 
-Then register it in `SIEMWebhookAdapter` or replace the adapter lookup logic.
+For webhook-based SIEMs, write a custom adapter implementing the `AlertAdapter` interface
+in `app/ingestion/adapters/`.
 
 ### 3. Add field mapping (if needed)
 
 Only required when the SIEM uses generic field names without semantic meaning
-(e.g., `key_word1`, `field_1`). Add entries to `FIELD_MAPPING` in `field_mapping.py`:
-
-```python
-FIELD_MAPPING = {
-    "My_SIEM_Alert_Name": {
-        "fields": {
-            "key_word1": {"entity_type": "ip"},
-            "key_word2": {"entity_type": "domain"},
-        }
-    },
-}
-```
+(e.g., `key_word1`, `field_1`). Add entries to `FIELD_MAPPING` in `app/ingestion/field_mapping.py`.
 
 Semantic field names (`src_ip`, `process_hash`, `hostname`, `target_user`, etc.)
 are auto-detected by `_SEMANTIC_PATTERNS` and require no configuration.
@@ -133,7 +119,7 @@ are auto-detected by `_SEMANTIC_PATTERNS` and require no configuration.
 
 | Scenario | Work | Files to touch |
 |----------|------|---------------|
-| Webhook format matches `RawAlert` | Zero code — configure webhook URL | None |
-| Field names differ (e.g. `alertId` → `alarm_id`) | Write adapter, ~15 lines | New file in `adapters/` |
-| SIEM uses generic field names | Add field mapping, ~5 lines per alert | `field_mapping.py` |
+| API response matches `RawAlert` | Zero code — configure `SIEM_API_BASE` env var | None |
+| API response has different field names | Add mapping in poller, ~10 lines | `app/aggregation/poller.py` |
+| SIEM uses generic field names | Add field mapping, ~5 lines per alert | `app/ingestion/field_mapping.py` |
 | Different alert names (any vendor) | Zero code (ALERT_TYPE_MAP was the blocker — now gone) | None |
