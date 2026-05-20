@@ -74,6 +74,7 @@ class RawAlert(BaseModel):
     alert_time: str = Field(..., description="Alert time in ISO 8601 format")
     defense_line: DefenseLine = Field(..., description="Defense-line category")
     alert_name: str = Field(..., description="Human-readable alert name or rule title")
+    severity: str = Field(..., description="Severity from upstream SIEM: critical, high, medium, low")
     raw_evidence: dict[str, Any] = Field(
         default_factory=dict, description="Arbitrary evidence payload from the source"
     )

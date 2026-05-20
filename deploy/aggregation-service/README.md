@@ -106,23 +106,35 @@ GET {SIEM_API_BASE}/api/v1/alerts?page={N}&size={M}&status=unacknowledged&since=
 
 ### 自定义适配
 
-修改 `app/aggregation/poller.py` 第 100-108 行的字段映射：
+第三方 SIEM 对接只需修改 `app/aggregation/siem_client.py`，poller 无需改动：
 
+**认证方式：** 重写 `authenticate()` 方法：
 ```python
-RawAlert(
-    alarm_id=item.get("id", ...),           # SIEM 告警 ID 字段名
-    alert_time=item.get("created_at", ...), # 时间字段名
-    defense_line=item.get("defense_line", "endpoint"),
-    alert_name=item.get("name", ...),       # 告警名称字段名
-    raw_evidence=item.get("raw_evidence", item.get("evidence", {})),
-)
+class MySiemClient(SiemClient):
+    async def authenticate(self) -> None:
+        # POST /api/login → 获取 token
+        resp = await self._client.post(f"{self._base_url}/api/login", json={...})
+        self._token = resp.json()["token"]
+```
+
+**字段映射：** 重写 `_parse_item()` 方法：
+```python
+    def _parse_item(self, item: dict) -> RawAlert:
+        return RawAlert(
+            alarm_id=item["alertId"],
+            alert_time=item["timestamp"],
+            defense_line=item.get("category", "endpoint"),
+            alert_name=item["ruleName"],
+            severity=item.get("severity", "medium"),
+            raw_evidence=item,
+        )
 ```
 
 ### 告警字段规范
 
 **defense_line（必填）：** `endpoint` | `server` | `application` | `network` | `email` | `account`
 
-**新增告警名称：** 在 `app/ingestion/normalizer.py` 的 `ALERT_TYPE_MAP` 添加类型映射。
+**severity（必填）：** `critical` | `high` | `medium` | `low` — 直接从 SIEM 获取，不再在 normalizer 中推导。
 
 **通用字段名：** 在 `app/ingestion/field_mapping.py` 配置 `key_word1` 等字段的实体类型。
 
@@ -231,18 +243,6 @@ FIELD_MAPPING = {
 ```
 
 语义化字段名（`src_ip`、`process_hash`、`hostname` 等）由正则自动识别，不需要配置。
-
-### 告警名称类型映射在哪里
-
-`app/ingestion/normalizer.py` 的 `ALERT_TYPE_MAP`：
-
-```python
-ALERT_TYPE_MAP = {
-    "Endpoint_Abnormal_Process_Outbound": "malware",
-    "Email_Phishing_Link_Click": "phishing",
-    # 新增告警名称在此添加
-}
-```
 
 ## Docker
 

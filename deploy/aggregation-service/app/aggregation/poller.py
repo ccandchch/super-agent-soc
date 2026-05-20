@@ -7,17 +7,14 @@ import logging
 import os
 from datetime import datetime, timezone
 
-import httpx
-
 from app.ingestion.models import RawAlert
 from app.ingestion.normalizer import Normalizer
 from app.ingestion.dedup import DedupAggregator
 from app.aggregation.models import Event, EventSource
+from app.aggregation.siem_client import SiemClient
 
 logger = logging.getLogger(__name__)
 
-SIEM_API_BASE = os.environ.get("SIEM_API_BASE", "http://siem:8080")
-SIEM_API_KEY = os.environ.get("SIEM_API_KEY", "")
 POLL_INTERVAL_SECONDS = float(os.environ.get("SOC_POLL_INTERVAL", "60"))
 PAGE_SIZE = int(os.environ.get("SOC_POLL_PAGE_SIZE", "100"))
 
@@ -28,12 +25,15 @@ class SiemPoller:
 
     def __init__(
         self,
+        siem_client: SiemClient | None = None,
         normalizer: Normalizer | None = None,
         aggregator: DedupAggregator | None = None,
     ):
+        self._siem = siem_client or SiemClient()
         self._normalizer = normalizer or Normalizer()
         self._aggregator = aggregator or DedupAggregator()
         self._last_poll: str | None = None  # ISO8601 timestamp
+        self._authenticated = False
 
     async def poll(self) -> list[Event]:
         """Fetch unacknowledged alerts from SIEM, aggregate, and return Events."""
@@ -80,53 +80,28 @@ class SiemPoller:
 
     async def _fetch_alerts(self) -> list[RawAlert]:
         """Fetch unacknowledged alerts from SIEM API with pagination."""
+        if not self._authenticated:
+            try:
+                await self._siem.authenticate()
+            except Exception:
+                logger.exception("SIEM authentication failed")
+                return []
+            self._authenticated = True
+
         all_alerts: list[RawAlert] = []
         page = 0
-        since = self._last_poll
 
-        async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
-            while True:
-                params: dict = {"page": page, "size": PAGE_SIZE, "status": "unacknowledged"}
-                if since:
-                    params["since"] = since
+        while True:
+            data = await self._siem.fetch_page(page=page, size=PAGE_SIZE, since=self._last_poll)
+            items = data.get("items", [])
+            if not items:
+                break
 
-                try:
-                    resp = await client.get(
-                        f"{SIEM_API_BASE}/api/v1/alerts",
-                        params=params,
-                        headers={"Authorization": f"Bearer {SIEM_API_KEY}"} if SIEM_API_KEY else {},
-                    )
-                    if resp.status_code == 404 or resp.status_code == 204:
-                        break
-                    resp.raise_for_status()
-                    data = resp.json()
-                except httpx.ConnectError:
-                    logger.warning("SIEM API unreachable at %s", SIEM_API_BASE)
-                    return []
-                except Exception:
-                    logger.exception("SIEM API request failed")
-                    return []
+            all_alerts.extend(items)
 
-                items = data.get("items", data.get("alerts", []))
-                if not items:
-                    break
-
-                for item in items:
-                    try:
-                        # Adapt SIEM response into our RawAlert format
-                        all_alerts.append(RawAlert(
-                            alarm_id=item.get("id", item.get("alarm_id", "")),
-                            alert_time=item.get("created_at", item.get("alert_time", self._now_iso())),
-                            defense_line=item.get("defense_line", "endpoint"),
-                            alert_name=item.get("name", item.get("alert_name", "unknown")),
-                            raw_evidence=item.get("raw_evidence", item.get("evidence", {})),
-                        ))
-                    except Exception:
-                        logger.exception("Failed to parse SIEM alert item")
-
-                if len(items) < PAGE_SIZE:
-                    break
-                page += 1
+            if len(items) < PAGE_SIZE:
+                break
+            page += 1
 
         self._last_poll = self._now_iso()
         return all_alerts

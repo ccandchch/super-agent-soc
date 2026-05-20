@@ -1,7 +1,7 @@
 """Alert normalizer — converts RawAlert into NormalizedAlert.
 
-Performs type mapping, entity extraction (semantic + generic field patterns),
-fingerprint generation, and severity assignment.
+Performs entity extraction (semantic + generic field patterns) and
+fingerprint generation. Severity and alert type are passed through from the SIEM.
 """
 
 from __future__ import annotations
@@ -11,23 +11,6 @@ import re
 
 from app.ingestion.field_mapping import get_field_mapping
 from app.ingestion.models import Entity, NormalizedAlert, RawAlert, _uuid7
-
-# ── Alert name → unified type mapping ───────────────────────────────────────────
-
-ALERT_TYPE_MAP: dict[str, str] = {
-    "Endpoint_Abnormal_Process_Outbound": "malware",
-    "Endpoint_Ransomware_Detected": "ransomware",
-    "Email_Phishing_Link_Click": "phishing",
-    "Email_Malicious_Attachment": "malware",
-    "Network_C2_Communication": "network_c2",
-    "Network_Port_Scan": "recon",
-    "Account_Brute_Force": "anomaly_login",
-    "Account_Impossible_Travel": "anomaly_login",
-    "Server_Privilege_Escalation": "privilege_escalation",
-    "Endpoint_Webshell_Detected": "malware",
-    "App_SQL_Injection": "sql_injection",
-    "App_XSS_Attack": "xss",
-}
 
 # ── Semantic field-name pattern → entity type ───────────────────────────────────
 
@@ -48,8 +31,8 @@ class Normalizer:
     def normalize(self, raw: RawAlert, source: str) -> NormalizedAlert:
         """Normalize a raw alert into the standard internal representation."""
 
-        # 1. Type mapping
-        alert_type = ALERT_TYPE_MAP.get(raw.alert_name, raw.alert_name.lower())
+        # 1. Type is the raw alert name (passthrough from SIEM)
+        alert_type = raw.alert_name
 
         # 2. Entity extraction (semantic + generic, deduplicated)
         entities = self._extract_entities(raw.alert_name, raw.raw_evidence)
@@ -57,8 +40,8 @@ class Normalizer:
         # 3. Fingerprint generation
         fingerprint = self._generate_fingerprint(entities)
 
-        # 4. Default severity
-        severity = self._determine_severity(alert_type, raw.defense_line.value)
+        # 4. Severity from SIEM (passthrough)
+        severity = raw.severity
 
         return NormalizedAlert(
             source=source,
@@ -182,17 +165,3 @@ class Normalizer:
         canonical = ",".join(f"{e.type}:{e.value}" for e in sorted_entities)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
-    # ── Severity ────────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _determine_severity(alert_type: str, defense_line: str) -> str:
-        """Assign a default severity based on alert type and defense line."""
-        if alert_type in ("malware", "ransomware", "network_c2"):
-            if defense_line in ("endpoint", "server"):
-                return "high"
-            return "medium"
-
-        if alert_type in ("phishing", "anomaly_login"):
-            return "high"
-
-        return "medium"
